@@ -1,6 +1,6 @@
 {
   "name": "linkedin-mcp-search",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for LinkedIn job search with comprehensive filtering - search jobs, filter by location, experience, remote work, and more",
   "main": "dist/index.js",
   "type": "module",
