@@ -1,6 +1,6 @@
 # LinkedIn Job Search MCP
 
-A Model Context Protocol (MCP) server for LinkedIn job search. Search jobs, filter by location, experience level, remote work, and more - all from Claude, Cursor, or any MCP client.
+A Model Context Protocol (MCP) server for LinkedIn job search. Search jobs, filter by location, experience level, remote work, and more. Works with any MCP-compatible client including Claude Desktop, Cursor, VS Code, and other AI assistants.
 
 [![npm version](https://badge.fury.io/js/linkedin-mcp-search.svg)](https://www.npmjs.com/package/linkedin-mcp-search)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -9,7 +9,7 @@ A Model Context Protocol (MCP) server for LinkedIn job search. Search jobs, filt
 
 ### Option 1: Using npx (Recommended - No Installation)
 
-Add to your Claude Desktop or Cursor MCP configuration:
+Add to your MCP client configuration (Claude Desktop, Cursor, VS Code, etc.):
 
 **Claude Desktop** (`claude_desktop_config.json`):
 
@@ -85,6 +85,20 @@ Then configure with full path:
 | **Claude Desktop (Windows)** | `%APPDATA%\Claude\claude_desktop_config.json` |
 | **Cursor (Project)** | `.cursor/mcp.json` in your project root |
 | **Cursor (Global)** | `~/.cursor/mcp.json` |
+| **VS Code** | Via MCP extension settings |
+| **Other MCP Clients** | Check your client's documentation for MCP server configuration |
+
+## MCP Compatibility
+
+MCP (Model Context Protocol) is an open standard that works with various AI assistants and tools:
+
+- **Claude Desktop** - Free desktop app from Anthropic
+- **Cursor** - AI-powered code editor
+- **VS Code** - Via MCP extensions
+- **Custom MCP Clients** - Any tool that implements the MCP protocol
+- **Programmatic Use** - Can be used directly via stdio transport
+
+You don't need a paid subscription to use MCP servers. The protocol is open and free to use with any compatible client.
 
 ## Features
 
@@ -155,7 +169,7 @@ For future features like saved jobs (requires LinkedIn Partner API):
 
 ## Example Prompts
 
-Once configured, you can ask Claude or Cursor:
+Once configured, you can use it with any MCP-compatible client:
 
 ```
 "Search for remote software engineer jobs"
@@ -197,11 +211,37 @@ Once configured, you can ask Claude or Cursor:
 - **Public API only** - Uses LinkedIn's guest job search (no scraping of private data)
 - **Rate limiting** - LinkedIn may temporarily block if too many requests are made. Add delays between searches if needed.
 
+## Using Without Claude/Cursor
+
+### Programmatic Use
+
+You can use the MCP server directly in your own applications:
+
+```javascript
+import { jobService } from 'linkedin-mcp-search';
+
+const results = await jobService.searchJobs({
+  keywords: 'Software Engineer',
+  location: 'San Francisco',
+  limit: 10
+});
+```
+
+### Other MCP Clients
+
+MCP is an open protocol. Any client that supports MCP can use this server:
+
+- **VS Code** - Install an MCP extension and configure the server
+- **Custom Clients** - Implement MCP client protocol to connect
+- **CLI Tools** - Use via stdio transport
+
+The server communicates via stdio using JSON-RPC, following the MCP specification.
+
 ## Development
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/linkedin-mcp-search.git
+git clone https://github.com/saisudhir14/linkedin-mcp-search.git
 cd linkedin-mcp-search
 
 # Install dependencies
