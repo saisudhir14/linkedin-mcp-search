@@ -5,7 +5,7 @@ A Model Context Protocol (MCP) server for LinkedIn job search. Search jobs, filt
 [![npm version](https://badge.fury.io/js/linkedin-mcp-search.svg)](https://www.npmjs.com/package/linkedin-mcp-search)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Option 1: Using npx (Recommended - No Installation)
 
@@ -77,7 +77,7 @@ Then configure with full path:
 }
 ```
 
-## 📍 Config File Locations
+## Config File Locations
 
 | Platform | Config File Location |
 |----------|---------------------|
@@ -86,7 +86,7 @@ Then configure with full path:
 | **Cursor (Project)** | `.cursor/mcp.json` in your project root |
 | **Cursor (Global)** | `~/.cursor/mcp.json` |
 
-## 🔧 Features
+## Features
 
 ### Job Search (No Authentication Required)
 - **Keyword search** - "Software Engineer", "Data Scientist Python", etc.
@@ -117,7 +117,7 @@ For future features like saved jobs (requires LinkedIn Partner API):
 }
 ```
 
-## 🛠️ Available Tools
+## Available Tools
 
 ### Job Search Tools
 
@@ -153,7 +153,7 @@ For future features like saved jobs (requires LinkedIn Partner API):
 | `linkedin_logout` | Clear stored credentials |
 | `linkedin_status` | Check authentication status |
 
-## 💬 Example Prompts
+## Example Prompts
 
 Once configured, you can ask Claude or Cursor:
 
@@ -171,7 +171,7 @@ Once configured, you can ask Claude or Cursor:
 "Find senior DevOps positions with remote work options"
 ```
 
-## 📊 Search Parameters
+## Search Parameters
 
 ### search_jobs
 
@@ -191,13 +191,13 @@ Once configured, you can ask Claude or Cursor:
 | `start` | number | Pagination offset |
 | `limit` | number | Max results (default: 25, max: 50) |
 
-## 🔒 Privacy & Rate Limiting
+## Privacy & Rate Limiting
 
 - **No data stored** - All searches are stateless
 - **Public API only** - Uses LinkedIn's guest job search (no scraping of private data)
 - **Rate limiting** - LinkedIn may temporarily block if too many requests are made. Add delays between searches if needed.
 
-## 🏗️ Development
+## Development
 
 ```bash
 # Clone the repository
@@ -217,7 +217,7 @@ npm start
 npm run watch
 ```
 
-## 📦 Publishing to npm
+## Publishing to npm
 
 ```bash
 # Login to npm
@@ -230,7 +230,7 @@ npm version patch  # or minor/major
 npm publish
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### "MCP server not found"
 - Ensure Node.js 18+ is installed: `node --version`
@@ -246,14 +246,14 @@ npm publish
 - Wait a few minutes between searches
 - Reduce the number of requests
 
-## 📄 License
+## License
 
 MIT - See [LICENSE](LICENSE) file
 
-## ⚠️ Disclaimer
+## Disclaimer
 
 This project is not affiliated with LinkedIn. It uses LinkedIn's public guest API for job searching. Use responsibly and in accordance with LinkedIn's terms of service.
 
 ---
 
-**Made with ❤️ for job seekers everywhere**
+**Made for job seekers everywhere**

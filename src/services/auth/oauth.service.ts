@@ -323,7 +323,6 @@ export class OAuthService {
         <head><title>Authentication Successful</title></head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #0077b5 0%, #00a0dc 100%);">
           <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; max-width: 400px;">
-            <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
             <h1 style="color: #0077b5; margin: 0 0 16px 0;">Successfully Connected!</h1>
             <p style="color: #666; margin: 0 0 8px 0;">Welcome, ${this.user?.firstName || 'User'}!</p>
             <p style="color: #999; font-size: 14px; margin: 0;">You can close this window and return to your application.</p>
@@ -340,7 +339,6 @@ export class OAuthService {
         <head><title>Authentication Failed</title></head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
           <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; max-width: 400px;">
-            <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
             <h1 style="color: #e53e3e; margin: 0 0 16px 0;">Authentication Failed</h1>
             <p style="color: #666; margin: 0;">${message}</p>
           </div>
