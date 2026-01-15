@@ -1,0 +1,60 @@
+{
+  "name": "linkedin-mcp-search",
+  "version": "1.0.0",
+  "description": "MCP server for LinkedIn job search with comprehensive filtering - search jobs, filter by location, experience, remote work, and more",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "linkedin-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "watch": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "linkedin",
+    "job-search",
+    "ai",
+    "claude",
+    "cursor",
+    "jobs",
+    "career",
+    "remote-jobs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/saisudhir14/linkedin-mcp-search.git"
+  },
+  "homepage": "https://github.com/saisudhir14/linkedin-mcp-search#readme",
+  "bugs": {
+    "url": "https://github.com/saisudhir14/linkedin-mcp-search/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "domhandler": "^5.0.3",
+    "open": "^10.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.0"
+  }
+}
