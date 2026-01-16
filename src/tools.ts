@@ -1,46 +1,11 @@
 /**
- * MCP Tool Definitions
- * Defines all available tools for the LinkedIn MCP server
- * @module tools/definitions
+ * LinkedIn MCP Tool Definitions
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
-/**
- * Authentication tool definitions
- */
-export const authTools: Tool[] = [
-  {
-    name: 'linkedin_login',
-    description: 'Authenticate with LinkedIn using OAuth 2.0. Opens a browser window for the user to sign in. Required for features like viewing saved jobs and applications.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        scopes: {
-          type: 'array',
-          items: { type: 'string', enum: ['openid', 'profile', 'email', 'w_member_social'] },
-          description: 'OAuth scopes to request. Default: openid, profile, email',
-          default: ['openid', 'profile', 'email'],
-        },
-      },
-    },
-  },
-  {
-    name: 'linkedin_logout',
-    description: 'Sign out from LinkedIn and clear stored credentials',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'linkedin_status',
-    description: 'Check current authentication status and user info',
-    inputSchema: { type: 'object', properties: {} },
-  },
-];
-
-/**
- * Job search tool definitions
- */
-export const jobTools: Tool[] = [
+export const tools: Tool[] = [
+  // Job Tools
   {
     name: 'search_jobs',
     description: 'Search for jobs on LinkedIn with comprehensive filters. No authentication required.',
@@ -115,10 +80,7 @@ export const jobTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        jobId: {
-          type: 'string',
-          description: 'The LinkedIn job ID',
-        },
+        jobId: { type: 'string', description: 'The LinkedIn job ID' },
       },
       required: ['jobId'],
     },
@@ -129,10 +91,7 @@ export const jobTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        keywords: {
-          type: 'string',
-          description: 'Job search keywords',
-        },
+        keywords: { type: 'string', description: 'Job search keywords' },
         datePosted: {
           type: 'string',
           enum: ['past-24-hours', 'past-week', 'past-month', 'any-time'],
@@ -153,19 +112,9 @@ export const jobTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        keywords: {
-          type: 'string',
-          description: 'Job search keywords',
-        },
-        location: {
-          type: 'string',
-          description: 'Location to search in',
-        },
-        includeInternships: {
-          type: 'boolean',
-          description: 'Include internship positions',
-          default: true,
-        },
+        keywords: { type: 'string', description: 'Job search keywords' },
+        location: { type: 'string', description: 'Location to search in' },
+        includeInternships: { type: 'boolean', description: 'Include internship positions', default: true },
         datePosted: {
           type: 'string',
           enum: ['past-24-hours', 'past-week', 'past-month', 'any-time'],
@@ -176,22 +125,15 @@ export const jobTools: Tool[] = [
       required: ['keywords'],
     },
   },
-];
 
-/**
- * Company tool definitions
- */
-export const companyTools: Tool[] = [
+  // Company Tools
   {
     name: 'get_company',
     description: 'Get information about a company on LinkedIn',
     inputSchema: {
       type: 'object',
       properties: {
-        companyId: {
-          type: 'string',
-          description: 'The LinkedIn company ID or vanity name (e.g., "google", "microsoft")',
-        },
+        companyId: { type: 'string', description: 'The LinkedIn company ID or vanity name (e.g., "google", "microsoft")' },
       },
       required: ['companyId'],
     },
@@ -202,10 +144,7 @@ export const companyTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        query: {
-          type: 'string',
-          description: 'Company search query',
-        },
+        query: { type: 'string', description: 'Company search query' },
       },
       required: ['query'],
     },
@@ -216,25 +155,15 @@ export const companyTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        companyId: {
-          type: 'string',
-          description: 'The LinkedIn company ID',
-        },
-        keywords: {
-          type: 'string',
-          description: 'Additional keywords to filter jobs',
-        },
+        companyId: { type: 'string', description: 'The LinkedIn company ID' },
+        keywords: { type: 'string', description: 'Additional keywords to filter jobs' },
         limit: { type: 'number', default: 25 },
       },
       required: ['companyId'],
     },
   },
-];
 
-/**
- * Helper tool definitions
- */
-export const helperTools: Tool[] = [
+  // Helper Tools
   {
     name: 'get_popular_locations',
     description: 'Get a list of popular job search locations with their LinkedIn geographic IDs',
@@ -278,14 +207,4 @@ export const helperTools: Tool[] = [
       },
     },
   },
-];
-
-/**
- * All tool definitions combined
- */
-export const allTools: Tool[] = [
-  ...authTools,
-  ...jobTools,
-  ...companyTools,
-  ...helperTools,
 ];

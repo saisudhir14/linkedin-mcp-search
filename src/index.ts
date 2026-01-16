@@ -3,187 +3,199 @@
 /**
  * LinkedIn MCP Server
  * Model Context Protocol server for LinkedIn job search
- * @module linkedin-mcp-search
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+
+import { tools } from './tools.js';
 import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+  searchJobs,
+  searchRemoteJobs,
+  searchEntryLevelJobs,
+  getJobDetails,
+  getCompany,
+  searchCompanies,
+  getCompanyJobs,
+  buildPublicJobUrl,
+  POPULAR_LOCATIONS,
+  INDUSTRIES,
+  JOB_FUNCTIONS,
+} from './linkedin.js';
+import type { JobSearchParams, DatePosted, ExperienceLevel } from './types.js';
 
-// Internal imports
-import { getEnvConfig } from './config/index.js';
-import { OAuthService } from './services/auth/index.js';
-import { allTools } from './tools/definitions.js';
-import {
-  // Auth handlers
-  handleLogin,
-  handleLogout,
-  handleStatus,
-  // Job handlers
-  handleSearchJobs,
-  handleGetJobDetails,
-  handleSearchRemoteJobs,
-  handleSearchEntryLevelJobs,
-  // Company handlers
-  handleGetCompany,
-  handleSearchCompanies,
-  handleGetCompanyJobs,
-  // Helper handlers
-  handleGetPopularLocations,
-  handleGetIndustries,
-  handleGetJobFunctions,
-  handleBuildJobSearchUrl,
-} from './tools/handlers/index.js';
-import type { DatePosted, ExperienceLevel } from './types/index.js';
-
-// ==================== Initialization ====================
-
-const config = getEnvConfig();
-
-// Initialize OAuth service if configured
-const auth = config.isOAuthConfigured
-  ? new OAuthService({
-      clientId: config.linkedIn.clientId,
-      clientSecret: config.linkedIn.clientSecret,
-      port: config.linkedIn.redirectPort,
-    })
-  : null;
-
-// ==================== MCP Server ====================
-
+// MCP Server
 const server = new Server(
-  {
-    name: 'linkedin-mcp-search',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
+  { name: 'linkedin-mcp-search', version: '1.0.0' },
+  { capabilities: { tools: {} } }
 );
 
-// ==================== Request Handlers ====================
+// List tools handler
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 
-/**
- * List all available tools
- */
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools: allTools };
-});
-
-/**
- * Handle tool invocations
- */
+// Call tool handler
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
 
   try {
-    const result = await routeToolCall(name, args as Record<string, unknown>);
-    return {
-      content: [{ type: 'text', text: result }],
-    };
+    const result = await handleTool(name, args as Record<string, unknown>);
+    return { content: [{ type: 'text', text: result }] };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            error: error instanceof Error ? error.message : 'Unknown error',
-          }),
-        },
-      ],
+      content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }) }],
       isError: true,
     };
   }
 });
 
-/**
- * Route tool calls to appropriate handlers
- */
-async function routeToolCall(
-  name: string,
-  args: Record<string, unknown>
-): Promise<string> {
+async function handleTool(name: string, args: Record<string, unknown>): Promise<string> {
   switch (name) {
-    // ==================== Auth Tools ====================
-    case 'linkedin_login':
-      return handleLogin(args as { scopes?: string[] }, { auth });
+    // Job tools
+    case 'search_jobs': {
+      const params: JobSearchParams = {
+        keywords: args.keywords as string | undefined,
+        location: args.location as string | undefined,
+        geoId: args.geoId as string | undefined,
+        distance: args.distance as number | undefined,
+        jobType: args.jobType as JobSearchParams['jobType'],
+        experienceLevel: args.experienceLevel as JobSearchParams['experienceLevel'],
+        workplaceType: args.workplaceType as JobSearchParams['workplaceType'],
+        datePosted: args.datePosted as DatePosted | undefined,
+        easyApply: args.easyApply as boolean | undefined,
+        companyIds: args.companyIds as string[] | undefined,
+        sortBy: args.sortBy as JobSearchParams['sortBy'],
+        start: args.start as number | undefined,
+        limit: args.limit as number | undefined,
+      };
+      const result = await searchJobs(params);
+      return JSON.stringify({
+        success: true,
+        totalResults: result.totalResults,
+        currentPage: result.currentPage,
+        hasMore: result.hasMore,
+        jobCount: result.jobs.length,
+        jobs: result.jobs.map(j => ({
+          id: j.id, title: j.title, company: j.company, location: j.location,
+          workplaceType: j.workplaceType, postedTimeAgo: j.postedTimeAgo,
+          salary: j.salary, isEasyApply: j.isEasyApply, isPromoted: j.isPromoted, url: j.url,
+        })),
+      });
+    }
 
-    case 'linkedin_logout':
-      return handleLogout({ auth });
+    case 'get_job_details': {
+      const job = await getJobDetails(args.jobId as string);
+      if (!job) return JSON.stringify({ success: false, error: 'Job not found' });
+      return JSON.stringify({
+        success: true,
+        job: {
+          id: job.id, title: job.title, company: job.company, location: job.location,
+          workplaceType: job.workplaceType, jobType: job.jobType, experienceLevel: job.experienceLevel,
+          postedTimeAgo: job.postedTimeAgo, applicants: job.applicants, salary: job.salary,
+          isEasyApply: job.isEasyApply, url: job.url, description: job.fullDescription,
+          seniorityLevel: job.seniorityLevel, employmentType: job.employmentType,
+          industries: job.industries, jobFunctions: job.jobFunctions,
+          companyLinkedInUrl: job.companyLinkedInUrl, applicationUrl: job.applicationUrl,
+        },
+      });
+    }
 
-    case 'linkedin_status':
-      return handleStatus({ auth });
+    case 'search_remote_jobs': {
+      const result = await searchRemoteJobs(args.keywords as string, {
+        datePosted: args.datePosted as DatePosted | undefined,
+        experienceLevel: args.experienceLevel as ExperienceLevel[] | undefined,
+        limit: args.limit as number | undefined,
+      });
+      return JSON.stringify({
+        success: true,
+        searchType: 'remote_jobs',
+        totalResults: result.totalResults,
+        jobCount: result.jobs.length,
+        jobs: result.jobs.map(j => ({
+          id: j.id, title: j.title, company: j.company, location: j.location,
+          postedTimeAgo: j.postedTimeAgo, salary: j.salary, isEasyApply: j.isEasyApply, url: j.url,
+        })),
+      });
+    }
 
-    // ==================== Job Tools ====================
-    case 'search_jobs':
-      return handleSearchJobs(args);
+    case 'search_entry_level_jobs': {
+      const result = await searchEntryLevelJobs(args.keywords as string, {
+        location: args.location as string | undefined,
+        includeInternships: args.includeInternships as boolean | undefined,
+        datePosted: args.datePosted as DatePosted | undefined,
+        limit: args.limit as number | undefined,
+      });
+      return JSON.stringify({
+        success: true,
+        searchType: 'entry_level_jobs',
+        totalResults: result.totalResults,
+        jobCount: result.jobs.length,
+        jobs: result.jobs.map(j => ({
+          id: j.id, title: j.title, company: j.company, location: j.location,
+          postedTimeAgo: j.postedTimeAgo, salary: j.salary, isEasyApply: j.isEasyApply, url: j.url,
+        })),
+      });
+    }
 
-    case 'get_job_details':
-      return handleGetJobDetails(args as { jobId: string });
+    // Company tools
+    case 'get_company': {
+      const company = await getCompany(args.companyId as string);
+      if (!company) return JSON.stringify({ success: false, error: 'Company not found' });
+      return JSON.stringify({ success: true, company });
+    }
 
-    case 'search_remote_jobs':
-      return handleSearchRemoteJobs(
-        args as {
-          keywords: string;
-          datePosted?: DatePosted;
-          experienceLevel?: ExperienceLevel[];
-          limit?: number;
-        }
-      );
+    case 'search_companies': {
+      const companies = await searchCompanies(args.query as string);
+      return JSON.stringify({ success: true, count: companies.length, companies });
+    }
 
-    case 'search_entry_level_jobs':
-      return handleSearchEntryLevelJobs(
-        args as {
-          keywords: string;
-          location?: string;
-          includeInternships?: boolean;
-          datePosted?: DatePosted;
-          limit?: number;
-        }
-      );
+    case 'get_company_jobs': {
+      const result = await getCompanyJobs(args.companyId as string, {
+        keywords: args.keywords as string | undefined,
+        limit: args.limit as number | undefined,
+      });
+      return JSON.stringify({
+        success: true,
+        companyId: args.companyId,
+        totalResults: result.totalResults,
+        jobCount: result.jobs.length,
+        jobs: result.jobs.map(j => ({
+          id: j.id, title: j.title, company: j.company, location: j.location,
+          workplaceType: j.workplaceType, postedTimeAgo: j.postedTimeAgo,
+          salary: j.salary, isEasyApply: j.isEasyApply, url: j.url,
+        })),
+      });
+    }
 
-    // ==================== Company Tools ====================
-    case 'get_company':
-      return handleGetCompany(args as { companyId: string });
-
-    case 'search_companies':
-      return handleSearchCompanies(args as { query: string });
-
-    case 'get_company_jobs':
-      return handleGetCompanyJobs(
-        args as {
-          companyId: string;
-          keywords?: string;
-          limit?: number;
-        }
-      );
-
-    // ==================== Helper Tools ====================
+    // Helper tools
     case 'get_popular_locations':
-      return handleGetPopularLocations();
+      return JSON.stringify({ locations: POPULAR_LOCATIONS });
 
     case 'get_industries':
-      return handleGetIndustries();
+      return JSON.stringify({ industries: INDUSTRIES });
 
     case 'get_job_functions':
-      return handleGetJobFunctions();
+      return JSON.stringify({ jobFunctions: JOB_FUNCTIONS });
 
-    case 'build_job_search_url':
-      return handleBuildJobSearchUrl(args);
+    case 'build_job_search_url': {
+      const url = buildPublicJobUrl({
+        keywords: args.keywords as string | undefined,
+        location: args.location as string | undefined,
+        jobType: args.jobType as JobSearchParams['jobType'],
+        experienceLevel: args.experienceLevel as JobSearchParams['experienceLevel'],
+        workplaceType: args.workplaceType as JobSearchParams['workplaceType'],
+        datePosted: args.datePosted as DatePosted | undefined,
+        easyApply: args.easyApply as boolean | undefined,
+      });
+      return JSON.stringify({ url });
+    }
 
-    // ==================== Unknown Tool ====================
     default:
       return JSON.stringify({ error: `Unknown tool: ${name}` });
   }
 }
 
-// ==================== Entry Point ====================
-
+// Entry point
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
