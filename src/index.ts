@@ -2,7 +2,7 @@
 
 /**
  * LinkedIn MCP Server
- * Model Context Protocol server for LinkedIn job search
+ * Model Context Protocol server for LinkedIn jobs, companies, and posts.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -10,227 +10,155 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 import { tools } from './tools.js';
-import {
-  searchJobs,
-  searchRemoteJobs,
-  searchEntryLevelJobs,
-  getJobDetails,
-  getCompany,
-  searchCompanies,
-  getCompanyJobs,
-  buildPublicJobUrl,
-  searchPosts,
-  POPULAR_LOCATIONS,
-  INDUSTRIES,
-  JOB_FUNCTIONS,
-} from './linkedin.js';
-import type { JobSearchParams, DatePosted, ExperienceLevel, PostSearchParams } from './types.js';
+import { buildPublicJobUrl, getJobDetails, searchJobs } from './jobs.js';
+import { getCompany, searchCompanies } from './companies.js';
+import { buildPostSearchUrl, getPostDetails, searchPosts } from './posts.js';
+import { INDUSTRIES, JOB_FUNCTIONS, POPULAR_LOCATIONS } from './constants.js';
+import type { ExperienceLevel, JobSearchParams, JobSearchResult, PostSearchParams } from './types.js';
 
-// MCP Server
+type Args = Record<string, unknown>;
+
 const server = new Server(
-  { name: 'linkedin-mcp-search', version: '1.0.0' },
+  { name: 'linkedin-mcp-search', version: '1.1.0' },
   { capabilities: { tools: {} } }
 );
 
-// List tools handler
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 
-// Call tool handler
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
 
   try {
-    const result = await handleTool(name, args as Record<string, unknown>);
-    return { content: [{ type: 'text', text: result }] };
+    const result = await handleTool(name, args);
+    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
   } catch (error) {
-    return {
-      content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }) }],
-      isError: true,
-    };
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { content: [{ type: 'text', text: JSON.stringify({ error: message }) }], isError: true };
   }
 });
 
-async function handleTool(name: string, args: Record<string, unknown>): Promise<string> {
+// ============ Argument helpers ============
+
+function requireString(args: Args, key: string): string {
+  const value = args[key];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`"${key}" is required and must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+/** Job search arguments use the same names and values as the search_jobs input schema. */
+const toJobParams = (args: Args): JobSearchParams => args as JobSearchParams;
+
+const toPostParams = (args: Args): PostSearchParams => ({
+  ...(args as Partial<PostSearchParams>),
+  keywords: requireString(args, 'keywords'),
+});
+
+const formatJobs = (result: JobSearchResult) => ({
+  success: true,
+  jobCount: result.jobs.length,
+  nextStart: result.nextStart,
+  searchUrl: result.searchUrl,
+  jobs: result.jobs,
+});
+
+// ============ Tool dispatch ============
+
+async function handleTool(name: string, args: Args): Promise<unknown> {
   switch (name) {
-    // Job tools
-    case 'search_jobs': {
-      const params: JobSearchParams = {
-        keywords: args.keywords as string | undefined,
-        location: args.location as string | undefined,
-        geoId: args.geoId as string | undefined,
-        distance: args.distance as number | undefined,
-        jobType: args.jobType as JobSearchParams['jobType'],
-        experienceLevel: args.experienceLevel as JobSearchParams['experienceLevel'],
-        workplaceType: args.workplaceType as JobSearchParams['workplaceType'],
-        datePosted: args.datePosted as DatePosted | undefined,
-        easyApply: args.easyApply as boolean | undefined,
-        companyIds: args.companyIds as string[] | undefined,
-        sortBy: args.sortBy as JobSearchParams['sortBy'],
-        start: args.start as number | undefined,
-        limit: args.limit as number | undefined,
-      };
-      const result = await searchJobs(params);
-      return JSON.stringify({
-        success: true,
-        totalResults: result.totalResults,
-        currentPage: result.currentPage,
-        hasMore: result.hasMore,
-        jobCount: result.jobs.length,
-        jobs: result.jobs.map(j => ({
-          id: j.id, title: j.title, company: j.company, location: j.location,
-          workplaceType: j.workplaceType, postedTimeAgo: j.postedTimeAgo,
-          salary: j.salary, isEasyApply: j.isEasyApply, isPromoted: j.isPromoted, url: j.url,
-        })),
-      });
-    }
+    // Jobs
+    case 'search_jobs':
+      return formatJobs(await searchJobs(toJobParams(args)));
 
     case 'get_job_details': {
-      const job = await getJobDetails(args.jobId as string);
-      if (!job) return JSON.stringify({ success: false, error: 'Job not found' });
-      return JSON.stringify({
-        success: true,
-        job: {
-          id: job.id, title: job.title, company: job.company, location: job.location,
-          workplaceType: job.workplaceType, jobType: job.jobType, experienceLevel: job.experienceLevel,
-          postedTimeAgo: job.postedTimeAgo, applicants: job.applicants, salary: job.salary,
-          isEasyApply: job.isEasyApply, url: job.url, description: job.fullDescription,
-          seniorityLevel: job.seniorityLevel, employmentType: job.employmentType,
-          industries: job.industries, jobFunctions: job.jobFunctions,
-          companyLinkedInUrl: job.companyLinkedInUrl, applicationUrl: job.applicationUrl,
-        },
-      });
+      const job = await getJobDetails(requireString(args, 'jobId'));
+      return job ? { success: true, job } : { success: false, error: 'Job not found' };
     }
 
-    case 'search_remote_jobs': {
-      const result = await searchRemoteJobs(args.keywords as string, {
-        datePosted: args.datePosted as DatePosted | undefined,
+    case 'search_remote_jobs':
+      return formatJobs(await searchJobs({
+        keywords: requireString(args, 'keywords'),
+        workplaceType: ['remote'],
+        datePosted: (args.datePosted as JobSearchParams['datePosted']) ?? 'past-week',
         experienceLevel: args.experienceLevel as ExperienceLevel[] | undefined,
         limit: args.limit as number | undefined,
-      });
-      return JSON.stringify({
-        success: true,
-        searchType: 'remote_jobs',
-        totalResults: result.totalResults,
-        jobCount: result.jobs.length,
-        jobs: result.jobs.map(j => ({
-          id: j.id, title: j.title, company: j.company, location: j.location,
-          postedTimeAgo: j.postedTimeAgo, salary: j.salary, isEasyApply: j.isEasyApply, url: j.url,
-        })),
-      });
-    }
+      }));
 
     case 'search_entry_level_jobs': {
-      const result = await searchEntryLevelJobs(args.keywords as string, {
+      const experienceLevel: ExperienceLevel[] = ['entry-level'];
+      if (args.includeInternships !== false) experienceLevel.push('internship');
+      return formatJobs(await searchJobs({
+        keywords: requireString(args, 'keywords'),
         location: args.location as string | undefined,
-        includeInternships: args.includeInternships as boolean | undefined,
-        datePosted: args.datePosted as DatePosted | undefined,
+        experienceLevel,
+        datePosted: (args.datePosted as JobSearchParams['datePosted']) ?? 'past-week',
         limit: args.limit as number | undefined,
-      });
-      return JSON.stringify({
-        success: true,
-        searchType: 'entry_level_jobs',
-        totalResults: result.totalResults,
-        jobCount: result.jobs.length,
-        jobs: result.jobs.map(j => ({
-          id: j.id, title: j.title, company: j.company, location: j.location,
-          postedTimeAgo: j.postedTimeAgo, salary: j.salary, isEasyApply: j.isEasyApply, url: j.url,
-        })),
-      });
+      }));
     }
 
-    // Company tools
+    // Companies
     case 'get_company': {
-      const company = await getCompany(args.companyId as string);
-      if (!company) return JSON.stringify({ success: false, error: 'Company not found' });
-      return JSON.stringify({ success: true, company });
+      const company = await getCompany(requireString(args, 'companyId'));
+      return company ? { success: true, company } : { success: false, error: 'Company not found' };
     }
 
     case 'search_companies': {
-      const companies = await searchCompanies(args.query as string);
-      return JSON.stringify({ success: true, count: companies.length, companies });
+      const companies = await searchCompanies(requireString(args, 'query'));
+      return { success: true, count: companies.length, companies };
     }
 
     case 'get_company_jobs': {
-      const result = await getCompanyJobs(args.companyId as string, {
-        keywords: args.keywords as string | undefined,
-        limit: args.limit as number | undefined,
-      });
-      return JSON.stringify({
-        success: true,
-        companyId: args.companyId,
-        totalResults: result.totalResults,
-        jobCount: result.jobs.length,
-        jobs: result.jobs.map(j => ({
-          id: j.id, title: j.title, company: j.company, location: j.location,
-          workplaceType: j.workplaceType, postedTimeAgo: j.postedTimeAgo,
-          salary: j.salary, isEasyApply: j.isEasyApply, url: j.url,
-        })),
-      });
-    }
-
-    // Helper tools
-    case 'get_popular_locations':
-      return JSON.stringify({ locations: POPULAR_LOCATIONS });
-
-    case 'get_industries':
-      return JSON.stringify({ industries: INDUSTRIES });
-
-    case 'get_job_functions':
-      return JSON.stringify({ jobFunctions: JOB_FUNCTIONS });
-
-    case 'build_job_search_url': {
-      const url = buildPublicJobUrl({
+      const companyId = requireString(args, 'companyId');
+      // LinkedIn's company filter only accepts numeric IDs; otherwise match by name.
+      const companyFilter = /^\d+$/.test(companyId)
+        ? { companyIds: [companyId] }
+        : { company: companyId.replace(/-/g, ' ') };
+      return formatJobs(await searchJobs({
+        ...companyFilter,
         keywords: args.keywords as string | undefined,
         location: args.location as string | undefined,
-        jobType: args.jobType as JobSearchParams['jobType'],
-        experienceLevel: args.experienceLevel as JobSearchParams['experienceLevel'],
-        workplaceType: args.workplaceType as JobSearchParams['workplaceType'],
-        datePosted: args.datePosted as DatePosted | undefined,
-        easyApply: args.easyApply as boolean | undefined,
-      });
-      return JSON.stringify({ url });
+        datePosted: args.datePosted as JobSearchParams['datePosted'],
+        limit: args.limit as number | undefined,
+      }));
     }
 
-    // Post tools
+    // Posts
     case 'search_posts': {
-      const params: PostSearchParams = {
-        keywords: args.keywords as string,
-        datePosted: args.datePosted as DatePosted | undefined,
-        limit: args.limit as number | undefined,
-        start: args.start as number | undefined,
-      };
-      const result = await searchPosts(params);
-      return JSON.stringify({
-        success: true,
-        totalResults: result.totalResults,
-        currentPage: result.currentPage,
-        hasMore: result.hasMore,
-        postCount: result.posts.length,
-        posts: result.posts.map(p => ({
-          id: p.id,
-          author: p.author,
-          authorProfileUrl: p.authorProfileUrl,
-          authorHeadline: p.authorHeadline,
-          content: p.content,
-          postedTimeAgo: p.postedTimeAgo,
-          postedDate: p.postedDate,
-          url: p.url,
-          engagement: p.engagement,
-          isHiring: p.isHiring,
-          isRecruiting: p.isRecruiting,
-        })),
-      });
+      const result = await searchPosts(toPostParams(args));
+      return { success: true, postCount: result.posts.length, ...result };
     }
+
+    case 'get_post_details': {
+      const post = await getPostDetails(requireString(args, 'url'));
+      return post ? { success: true, post } : { success: false, error: 'Post not found or not public' };
+    }
+
+    case 'build_post_search_url':
+      return { url: buildPostSearchUrl(toPostParams(args)) };
+
+    // Helpers
+    case 'get_popular_locations':
+      return { locations: POPULAR_LOCATIONS };
+
+    case 'get_industries':
+      return { industries: INDUSTRIES };
+
+    case 'get_job_functions':
+      return { jobFunctions: JOB_FUNCTIONS };
+
+    case 'build_job_search_url':
+      return { url: buildPublicJobUrl(toJobParams(args)) };
 
     default:
-      return JSON.stringify({ error: `Unknown tool: ${name}` });
+      throw new Error(`Unknown tool: ${name}`);
   }
 }
 
-// Entry point
+// ============ Entry point ============
+
 async function main(): Promise<void> {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await server.connect(new StdioServerTransport());
   console.error('LinkedIn MCP Server running on stdio');
 }
 

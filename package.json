@@ -1,7 +1,7 @@
 {
   "name": "linkedin-mcp-search",
-  "version": "1.0.3",
-  "description": "MCP server for LinkedIn job search with comprehensive filtering - search jobs, filter by location, experience, remote work, and more",
+  "version": "1.1.0",
+  "description": "MCP server for LinkedIn jobs, companies, and hiring posts - search with LinkedIn filters, no login required",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
@@ -29,7 +29,9 @@
     "cursor",
     "jobs",
     "career",
-    "remote-jobs"
+    "remote-jobs",
+    "linkedin-posts",
+    "hiring"
   ],
   "author": "",
   "license": "MIT",
