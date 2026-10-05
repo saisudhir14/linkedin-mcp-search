@@ -11,7 +11,60 @@ import { fetchHtml } from './http.js';
 import { DEFAULT_LIMIT, LINKEDIN_BASE } from './constants.js';
 import type { LinkedInPost, PostDetails, PostSearchParams, PostSearchResult } from './types.js';
 
-const SEARCH_ENGINE_URL = 'https://html.duckduckgo.com/html/';
+interface SearchHit {
+  href: string;
+  title: string;
+  snippet: string;
+}
+
+interface SearchEngine {
+  url: string;
+  parse: ($: cheerio.CheerioAPI) => SearchHit[];
+}
+
+/** Tried in order; the next one is used when a search engine serves a bot check. */
+const SEARCH_ENGINES: SearchEngine[] = [
+  {
+    url: 'https://html.duckduckgo.com/html/',
+    parse: $ => $('.result').not('.result--ad').toArray().map(el => ({
+      href: $(el).find('a.result__a').attr('href') ?? '',
+      title: clean($(el).find('a.result__a').text()),
+      snippet: clean($(el).find('.result__snippet').text()),
+    })),
+  },
+  {
+    url: 'https://lite.duckduckgo.com/lite/',
+    parse: $ => $('a.result-link').toArray().map(el => ({
+      href: $(el).attr('href') ?? '',
+      title: clean($(el).text()),
+      snippet: clean($(el).closest('tr').nextAll('tr').first().find('.result-snippet').text()),
+    })),
+  },
+];
+
+const isBotCheck = (html: string) => /anomaly|captcha|challenge-form|unusual traffic/i.test(html);
+
+/** Search-engine result links are often redirects of the form //duckduckgo.com/l/?uddg=<target>. */
+function resolveResultLink(href: string): string {
+  try {
+    const url = new URL(href, 'https://duckduckgo.com');
+    return url.searchParams.get('uddg') ?? url.toString();
+  } catch {
+    return href;
+  }
+}
+
+async function searchWeb(query: string, dateCode?: string): Promise<SearchHit[]> {
+  const form: Record<string, string> = { q: query };
+  if (dateCode) form.df = dateCode;
+
+  for (const engine of SEARCH_ENGINES) {
+    const html = await fetchHtml(engine.url, { form });
+    const hits = engine.parse(cheerio.load(html));
+    if (hits.length > 0 || !isBotCheck(html)) return hits;
+  }
+  throw new Error('Post search is temporarily blocked by the search engine. Try again in a few minutes.');
+}
 
 const SEARCH_DATE_CODES: Record<string, string> = {
   'past-24-hours': 'd', 'past-week': 'w', 'past-month': 'm',
@@ -77,25 +130,15 @@ function authorFromTitle(title: string): string | undefined {
 
 export async function searchPosts(params: PostSearchParams): Promise<PostSearchResult> {
   const query = buildSearchQuery(params);
-  const sp = new URLSearchParams({ q: query });
   const dateCode = params.datePosted ? SEARCH_DATE_CODES[params.datePosted] : undefined;
-  if (dateCode) sp.set('df', dateCode);
-
-  const $ = cheerio.load(await fetchHtml(`${SEARCH_ENGINE_URL}?${sp}`));
   const posts: LinkedInPost[] = [];
   const seen = new Set<string>();
 
-  $('.result').not('.result--ad').each((_, el) => {
-    const $result = $(el);
-    const href = $result.find('a.result__a').attr('href') ?? '';
-    // Result links are redirects of the form //duckduckgo.com/l/?uddg=<encoded target>.
-    const target = new URL(href, 'https://duckduckgo.com').searchParams.get('uddg') ?? href;
-    const url = normalizePostUrl(target);
-    if (!url || seen.has(url)) return;
+  for (const { href, title, snippet } of await searchWeb(query, dateCode)) {
+    const url = normalizePostUrl(resolveResultLink(href));
+    if (!url || seen.has(url)) continue;
     seen.add(url);
 
-    const title = clean($result.find('a.result__a').text());
-    const snippet = clean($result.find('.result__snippet').text());
     const vanity = extractAuthorVanity(url);
 
     posts.push({
@@ -107,7 +150,7 @@ export async function searchPosts(params: PostSearchParams): Promise<PostSearchR
       snippet,
       isHiring: isHiringText(`${title} ${snippet}`),
     });
-  });
+  }
 
   const filtered = params.hiringOnly ? posts.filter(p => p.isHiring) : posts;
 

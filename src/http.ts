@@ -28,11 +28,19 @@ export class HttpError extends Error {
   }
 }
 
-/** GET a URL and return the response body as text. Retries rate-limited requests with backoff. */
-export async function fetchHtml(url: string): Promise<string> {
+/**
+ * Fetch a URL and return the response body as text. Sends a form POST when `form` is given.
+ * Retries rate-limited requests with backoff.
+ */
+export async function fetchHtml(url: string, options: { form?: Record<string, string> } = {}): Promise<string> {
   for (let attempt = 0; ; attempt++) {
     try {
-      const response = await client.get<string>(url, { responseType: 'text' });
+      const response = options.form
+        ? await client.post<string>(url, new URLSearchParams(options.form).toString(), {
+            responseType: 'text',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          })
+        : await client.get<string>(url, { responseType: 'text' });
       return response.data;
     } catch (error) {
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
@@ -41,7 +49,7 @@ export async function fetchHtml(url: string): Promise<string> {
         continue;
       }
       if (status === 999 || status === 429) {
-        throw new HttpError('LinkedIn is rate limiting requests. Wait a minute and try again.', status);
+        throw new HttpError(`${new URL(url).hostname} is rate limiting requests. Wait a minute and try again.`, status);
       }
       const message = error instanceof Error ? error.message : String(error);
       throw new HttpError(`Request failed: ${message}`, status);
