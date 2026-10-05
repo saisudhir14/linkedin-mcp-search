@@ -63,7 +63,6 @@ export async function searchCompanies(query: string, limit = 10): Promise<Linked
       id: vanity,
       name: job.company,
       linkedInUrl: `${LINKEDIN_BASE}/company/${vanity}`,
-      logo: job.companyLogo,
     });
   }
 

@@ -16,7 +16,6 @@ export interface LinkedInJob {
   title: string;
   company: string;
   companyUrl?: string;
-  companyLogo?: string;
   location: string;
   workplaceType: WorkplaceType;
   postedDate: string;

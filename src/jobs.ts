@@ -60,7 +60,16 @@ function buildGuestSearchUrl(params: JobSearchParams, start: number): string {
 // ============ Parsing ============
 
 const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
-const stripQuery = (url?: string) => url?.split('?')[0];
+/** Drop query strings and country subdomains (e.g. nl.linkedin.com) from LinkedIn URLs. */
+function normalizeLinkedInUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  try {
+    const { pathname } = new URL(url);
+    return `${LINKEDIN_BASE}${pathname.replace(/\/$/, '')}`;
+  } catch {
+    return undefined;
+  }
+}
 
 function detectWorkplaceType(text: string): WorkplaceType {
   const lower = text.toLowerCase();
@@ -106,8 +115,7 @@ function parseJobCard($card: cheerio.Cheerio<Element>): LinkedInJob | null {
     id,
     title: title || 'Unknown Title',
     company: clean($company.text()) || 'Unknown Company',
-    companyUrl: stripQuery($company.find('a').attr('href')),
-    companyLogo: $card.find('img').attr('data-delayed-url') || undefined,
+    companyUrl: normalizeLinkedInUrl($company.find('a').attr('href')),
     location: location || 'Unknown Location',
     // Only look at title + location; card text elsewhere can mention "remote" incidentally.
     workplaceType: detectWorkplaceType(`${title} ${location}`),
@@ -206,7 +214,7 @@ export async function getJobDetails(jobId: string): Promise<JobDetails | null> {
     id: jobId,
     title,
     company: clean($companyLink.text()) || 'Unknown Company',
-    companyUrl: stripQuery($companyLink.attr('href')),
+    companyUrl: normalizeLinkedInUrl($companyLink.attr('href')),
     location: location || 'Unknown Location',
     workplaceType: detectWorkplaceType(`${title} ${location}`),
     jobType: mapJobType(criteria['employment type']),
