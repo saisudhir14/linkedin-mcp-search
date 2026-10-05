@@ -207,4 +207,35 @@ export const tools: Tool[] = [
       },
     },
   },
+
+  // Post Tools
+  {
+    name: 'search_posts',
+    description: 'Search for LinkedIn posts. Useful for finding posts where people are hiring, recruiting, or looking for specific roles (e.g., "golang developers", "react engineers"). Returns post details including post link, author, content, and engagement metrics.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        keywords: {
+          type: 'string',
+          description: 'Search keywords (e.g., "golang developers", "hiring react engineers", "looking for python developers")',
+        },
+        datePosted: {
+          type: 'string',
+          enum: ['past-24-hours', 'past-week', 'past-month', 'any-time'],
+          description: 'Filter by when posts were posted',
+          default: 'past-week',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 25, max: 50)',
+          default: 25,
+        },
+        start: {
+          type: 'number',
+          description: 'Pagination offset (default: 0)',
+        },
+      },
+      required: ['keywords'],
+    },
+  },
 ];

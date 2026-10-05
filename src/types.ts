@@ -84,3 +84,37 @@ export interface LinkedInCompany {
   founded?: string;
   specialties?: string[];
 }
+
+// Post interfaces
+export interface LinkedInPost {
+  id: string;
+  author: string;
+  authorProfileUrl?: string;
+  authorHeadline?: string;
+  content: string;
+  postedTimeAgo: string;
+  postedDate?: string;
+  url: string;
+  engagement?: {
+    likes?: number;
+    comments?: number;
+    shares?: number;
+  };
+  isHiring?: boolean;
+  isRecruiting?: boolean;
+}
+
+export interface PostSearchParams {
+  keywords: string;
+  datePosted?: DatePosted;
+  limit?: number;
+  start?: number;
+}
+
+export interface PostSearchResult {
+  posts: LinkedInPost[];
+  totalResults: number;
+  currentPage: number;
+  hasMore: boolean;
+  searchParams: PostSearchParams;
+}

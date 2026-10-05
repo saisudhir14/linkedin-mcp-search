@@ -19,11 +19,12 @@ import {
   searchCompanies,
   getCompanyJobs,
   buildPublicJobUrl,
+  searchPosts,
   POPULAR_LOCATIONS,
   INDUSTRIES,
   JOB_FUNCTIONS,
 } from './linkedin.js';
-import type { JobSearchParams, DatePosted, ExperienceLevel } from './types.js';
+import type { JobSearchParams, DatePosted, ExperienceLevel, PostSearchParams } from './types.js';
 
 // MCP Server
 const server = new Server(
@@ -188,6 +189,37 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
         easyApply: args.easyApply as boolean | undefined,
       });
       return JSON.stringify({ url });
+    }
+
+    // Post tools
+    case 'search_posts': {
+      const params: PostSearchParams = {
+        keywords: args.keywords as string,
+        datePosted: args.datePosted as DatePosted | undefined,
+        limit: args.limit as number | undefined,
+        start: args.start as number | undefined,
+      };
+      const result = await searchPosts(params);
+      return JSON.stringify({
+        success: true,
+        totalResults: result.totalResults,
+        currentPage: result.currentPage,
+        hasMore: result.hasMore,
+        postCount: result.posts.length,
+        posts: result.posts.map(p => ({
+          id: p.id,
+          author: p.author,
+          authorProfileUrl: p.authorProfileUrl,
+          authorHeadline: p.authorHeadline,
+          content: p.content,
+          postedTimeAgo: p.postedTimeAgo,
+          postedDate: p.postedDate,
+          url: p.url,
+          engagement: p.engagement,
+          isHiring: p.isHiring,
+          isRecruiting: p.isRecruiting,
+        })),
+      });
     }
 
     default:

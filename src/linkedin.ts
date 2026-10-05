@@ -14,6 +14,9 @@ import type {
   WorkplaceType,
   JobType,
   ExperienceLevel,
+  PostSearchParams,
+  PostSearchResult,
+  LinkedInPost,
 } from './types.js';
 
 // ============ Constants ============
@@ -480,4 +483,214 @@ export async function getCompanyJobs(
     companyIds: [companyId],
     limit: options?.limit,
   });
+}
+
+// ============ Post Search Functions ============
+
+function buildPostSearchUrl(params: PostSearchParams): string {
+  const sp = new URLSearchParams();
+  sp.set('keywords', params.keywords);
+  
+  if (params.datePosted && params.datePosted !== 'any-time') {
+    sp.set('f_TPR', DATE_CODES[params.datePosted]);
+  }
+  
+  if (params.start && params.start > 0) {
+    sp.set('start', params.start.toString());
+  }
+  
+  // Search in posts/updates
+  return `${LINKEDIN_BASE}/search/results/content/?${sp.toString()}`;
+}
+
+function extractPostId(url: string): string | null {
+  // LinkedIn post URLs can be in various formats:
+  // /feed/update/urn:li:activity:1234567890
+  // /posts/1234567890
+  const patterns = [
+    /\/feed\/update\/urn:li:activity:(\d+)/,
+    /\/posts\/(\d+)/,
+    /activity-(\d+)/,
+    /urn:li:activity:(\d+)/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function detectHiringPost(content: string): boolean {
+  const lower = content.toLowerCase();
+  const hiringKeywords = [
+    'hiring', 'we are hiring', 'looking for', 'open position',
+    'job opening', 'join our team', 'career opportunity', 'recruiting',
+    'apply now', 'open role', 'position available', 'now hiring',
+    'seeking', 'opportunity for', 'role available', 'vacancy',
+  ];
+  return hiringKeywords.some(keyword => lower.includes(keyword));
+}
+
+function parsePostCard($: cheerio.CheerioAPI, $card: cheerio.Cheerio<Element>): LinkedInPost | null {
+  try {
+    // Extract post link
+    const postLink = $card.find('a.app-aware-link, a.feed-shared-update-v2__description-wrapper').attr('href') ||
+                     $card.find('a[href*="/feed/update"], a[href*="/posts/"]').attr('href') ||
+                     $card.find('a').filter((_, el) => {
+                       const href = $(el).attr('href') || '';
+                       return href.includes('/feed/update') || href.includes('/posts/') || href.includes('activity-');
+                     }).first().attr('href');
+    
+    if (!postLink) return null;
+    
+    const fullUrl = postLink.startsWith('http') ? postLink : `${LINKEDIN_BASE}${postLink}`;
+    const postId = extractPostId(fullUrl) || extractPostId(postLink) || 'unknown';
+    
+    // Extract author information
+    const author = $card.find('.feed-shared-actor__name, .update-components-actor__name, .feed-shared-actor__title').first().text().trim() ||
+                   $card.find('span[dir="ltr"]').first().text().trim() ||
+                   'Unknown Author';
+    
+    const authorLink = $card.find('a.feed-shared-actor__name-link, a.update-components-actor__link').attr('href');
+    const authorProfileUrl = authorLink ? (authorLink.startsWith('http') ? authorLink : `${LINKEDIN_BASE}${authorLink}`) : undefined;
+    
+    const authorHeadline = $card.find('.feed-shared-actor__description, .update-components-actor__description').text().trim() || undefined;
+    
+    // Extract post content
+    const content = $card.find('.feed-shared-text-view, .update-components-text, .feed-shared-update-v2__description').text().trim() ||
+                    $card.find('.feed-shared-inline-show-more-text, .feed-shared-text').text().trim() ||
+                    $card.find('span[dir="ltr"]').slice(1).text().trim() ||
+                    '';
+    
+    // Extract posted time
+    const postedTimeAgo = $card.find('span.feed-shared-actor__sub-description, .update-components-actor__sub-description, time').text().trim() ||
+                         $card.find('span[aria-label*="ago"]').attr('aria-label') ||
+                         'Unknown';
+    
+    const postedDate = $card.find('time').attr('datetime') || undefined;
+    
+    // Extract engagement metrics
+    const engagementText = $card.find('.social-actions-button, .feed-shared-social-action-bar').text().trim();
+    const likesMatch = engagementText.match(/(\d+)\s*(?:like|reaction)/i);
+    const commentsMatch = engagementText.match(/(\d+)\s*comment/i);
+    const sharesMatch = engagementText.match(/(\d+)\s*share/i);
+    
+    const engagement = {
+      likes: likesMatch ? parseInt(likesMatch[1], 10) : undefined,
+      comments: commentsMatch ? parseInt(commentsMatch[1], 10) : undefined,
+      shares: sharesMatch ? parseInt(sharesMatch[1], 10) : undefined,
+    };
+    
+    // Detect if it's a hiring/recruiting post
+    const isHiring = detectHiringPost(content);
+    const isRecruiting = isHiring || content.toLowerCase().includes('recruiting');
+    
+    return {
+      id: postId,
+      author,
+      authorProfileUrl,
+      authorHeadline,
+      content: content || 'No content available',
+      postedTimeAgo,
+      postedDate,
+      url: fullUrl,
+      engagement: Object.keys(engagement).length > 0 ? engagement : undefined,
+      isHiring,
+      isRecruiting,
+    };
+  } catch (error) {
+    console.error('Error parsing post card:', error);
+    return null;
+  }
+}
+
+function parsePostListings(html: string): LinkedInPost[] {
+  const $ = cheerio.load(html);
+  const posts: LinkedInPost[] = [];
+  
+  // Try multiple selectors for LinkedIn post cards
+  const selectors = [
+    'div.feed-shared-update-v2',
+    'li.reusable-search__result-container',
+    'div.update-components-actor',
+    'div.feed-shared-update-v2__description-wrapper',
+  ];
+  
+  for (const selector of selectors) {
+    $(selector).each((_: number, el) => {
+      if (el.type !== 'tag') return;
+      try {
+        const post = parsePostCard($, $(el as Element));
+        if (post && post.content) {
+          posts.push(post);
+        }
+      } catch { /* skip */ }
+    });
+    
+    if (posts.length > 0) break; // Use first selector that finds posts
+  }
+  
+  // If no posts found with standard selectors, try a more generic approach
+  if (posts.length === 0) {
+    $('div[data-urn*="activity"], article, div.feed-shared-update').each((_: number, el) => {
+      if (el.type !== 'tag') return;
+      try {
+        const post = parsePostCard($, $(el as Element));
+        if (post && post.content && post.id !== 'unknown') {
+          posts.push(post);
+        }
+      } catch { /* skip */ }
+    });
+  }
+  
+  return posts;
+}
+
+function parsePostTotalResults(html: string): number | null {
+  const $ = cheerio.load(html);
+  const text = $('span.results-context-header__text, .search-results__total').text().trim();
+  const count = parseNumber(text);
+  return count > 0 ? count : null;
+}
+
+export async function searchPosts(params: PostSearchParams): Promise<PostSearchResult> {
+  const url = buildPostSearchUrl(params);
+  const limit = Math.min(params.limit || 25, MAX_LIMIT);
+  const start = params.start || 0;
+  
+  try {
+    const response = await client.get(url);
+    const posts = parsePostListings(response.data);
+    const totalResults = parsePostTotalResults(response.data) || posts.length + start;
+    
+    // Filter posts that are likely about hiring/recruiting if keywords suggest it
+    const keywordsLower = params.keywords.toLowerCase();
+    const isHiringSearch = keywordsLower.includes('hiring') || 
+                          keywordsLower.includes('looking for') ||
+                          keywordsLower.includes('recruiting') ||
+                          keywordsLower.includes('job') ||
+                          keywordsLower.includes('position') ||
+                          keywordsLower.includes('developer') ||
+                          keywordsLower.includes('engineer');
+    
+    let filteredPosts = posts;
+    if (isHiringSearch) {
+      // Prioritize posts that are marked as hiring/recruiting
+      filteredPosts = posts.filter(p => p.isHiring || p.isRecruiting || 
+        p.content.toLowerCase().includes(keywordsLower.split(' ')[0]));
+    }
+    
+    return {
+      posts: filteredPosts.slice(0, limit),
+      totalResults,
+      currentPage: Math.floor(start / 25) + 1,
+      hasMore: posts.length >= 25,
+      searchParams: params,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(`LinkedIn post search failed: ${error.message}`);
+    }
+    throw error;
+  }
 }
