@@ -44,16 +44,16 @@
     "url": "https://github.com/saisudhir14/linkedin-mcp-search/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
     "domhandler": "^5.0.3"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@types/node": "^22.20.5",
     "ts-node": "^1.7.1",
     "typescript": "^5.3.0"
   }
